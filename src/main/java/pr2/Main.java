@@ -13,12 +13,12 @@ import java.util.concurrent.*;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException {
-        CryptoService crypto = new CryptoService("ConcurrencyTest1".getBytes(StandardCharsets.UTF_8));
+        CryptoService crypto = new CryptoService("ConcurrencyMain1".getBytes(StandardCharsets.UTF_8));
 
-        BlockingQueue<byte[]> rawIncoming = new LinkedBlockingQueue<>();
+        BlockingQueue<byte[]> incoming = new LinkedBlockingQueue<>();
         BlockingQueue<Packet> decoded = new LinkedBlockingQueue<>();
         BlockingQueue<Packet> responses = new LinkedBlockingQueue<>();
-        BlockingQueue<byte[]> rawOutgoing = new LinkedBlockingQueue<>();
+        BlockingQueue<byte[]> outgoing = new LinkedBlockingQueue<>();
 
         MessageReceiver source = new FakeMessageReceiver(crypto);
         MessageSender sink = new BasicMessageSender();
@@ -26,24 +26,24 @@ public class Main {
         ExecutorService pool = Executors.newFixedThreadPool(16);
 
         for (int i = 0; i < 2; i++)
-            pool.submit(new Receiver(source, rawIncoming));
+            pool.submit(new Receiver(source, incoming));
 
         for (int i = 0; i < 2; i++)
-            pool.submit(new Decryptor(rawIncoming, decoded, crypto));
+            pool.submit(new Decryptor(incoming, decoded, crypto));
 
         for (int i = 0; i < 4; i++)
             pool.submit(new Processor(decoded, responses));
 
         for (int i = 0; i < 3; i++)
-            pool.submit(new Encryptor(responses, rawOutgoing, crypto));
+            pool.submit(new Encryptor(responses, outgoing, crypto));
 
         for (int i = 0; i < 5; i++)
-            pool.submit(new Sender(sink, rawOutgoing));
+            pool.submit(new Sender(sink, outgoing));
 
         Runtime.getRuntime().addShutdownHook(new Thread(pool::shutdownNow));
 
         System.out.println("[Main] Pipeline started. Running for 5 seconds...");
-        Thread.sleep(3000);
+        Thread.sleep(5000);
 
         System.out.println("[Main] Shutting down...");
         pool.shutdownNow();

@@ -20,7 +20,7 @@ public class FakeMessageReceiver implements MessageReceiver {
 
     @Override
     public byte[] receive() throws InterruptedException {
-        Thread.sleep(5 + random.nextInt(20)); //please sleep
+        Thread.sleep(500 + random.nextInt(1000));
 
         CommandType[] commands = CommandType.values();
         CommandType chosen = commands[random.nextInt(commands.length)];
