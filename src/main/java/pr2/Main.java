@@ -3,8 +3,10 @@ package pr2;
 import pr1.CryptoService;
 import pr1.Packet;
 import pr2.pipeline.*;
+import pr2.transport.BasicMessageSender;
 import pr2.transport.FakeMessageReceiver;
 import pr2.transport.MessageReceiver;
+import pr2.transport.MessageSender;
 
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.*;
@@ -19,6 +21,7 @@ public class Main {
         BlockingQueue<byte[]> rawOutgoing = new LinkedBlockingQueue<>();
 
         MessageReceiver source = new FakeMessageReceiver(crypto);
+        MessageSender sink = new BasicMessageSender();
 
         ExecutorService pool = Executors.newFixedThreadPool(16);
 
@@ -35,7 +38,7 @@ public class Main {
             pool.submit(new Encryptor(responses, rawOutgoing, crypto));
 
         for (int i = 0; i < 5; i++)
-            pool.submit(new Sender(rawOutgoing));
+            pool.submit(new Sender(sink, rawOutgoing));
 
         Runtime.getRuntime().addShutdownHook(new Thread(pool::shutdownNow));
 
