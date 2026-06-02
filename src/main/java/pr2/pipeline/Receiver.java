@@ -2,6 +2,7 @@ package pr2.pipeline;
 
 import pr2.transport.MessageReceiver;
 
+import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -25,6 +26,8 @@ public class Receiver implements Runnable {
                     byte[] data = source.receive();
                     output.put(data);
                 } catch (RuntimeException e) {
+                    System.err.println("[Receiver] Runtime error receiving: " + e.getMessage());
+                } catch (IOException e) {
                     System.err.println("[Receiver] Error receiving: " + e.getMessage());
                 }
             }

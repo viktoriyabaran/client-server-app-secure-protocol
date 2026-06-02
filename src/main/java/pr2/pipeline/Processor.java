@@ -55,7 +55,7 @@ public class Processor implements Runnable {
                 request.getbMsg().getbUserId(),
                 payload
         );
-        return new Packet(request.getbSrc(), responseMsg);
+        return new Packet(request.getbSrc(), request.getbPktId(), responseMsg);
     }
 
     private String escape(String s) {
