@@ -3,21 +3,38 @@ package pr2.pipeline;
 import pr1.Message;
 import pr1.Packet;
 import pr2.contracts.CommandType;
-import pr2.contracts.ResponseCode;
+import pr4.api.ProductRequests;
+import pr4.db.SqliteProductRepository;
+import pr4.filter.Page;
+import pr4.filter.ProductFilter;
+import pr4.model.Product;
+import pr4.service.ProductService;
 
-import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static pr2.pipeline.ProcessorHelpers.buildError;
+import static pr2.pipeline.ProcessorHelpers.buildOk;
+import static pr2.pipeline.ProcessorHelpers.parse;
 
 public class Processor implements Runnable {
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1);
     private final int id = NEXT_ID.getAndIncrement();
     private final BlockingQueue<Packet> input;
     private final BlockingQueue<Packet> output;
+    private final ProductService products;
 
     public Processor(BlockingQueue<Packet> input, BlockingQueue<Packet> output) {
+        this(input, output, new ProductService(new SqliteProductRepository("warehouse.db")));
+    }
+
+    public Processor(BlockingQueue<Packet> input, BlockingQueue<Packet> output, ProductService products) {
         this.input = input;
         this.output = output;
+        this.products = products;
     }
 
     private Packet process(Packet request) {
@@ -28,38 +45,68 @@ public class Processor implements Runnable {
             command = CommandType.fromCode(msg.getcType());
         } catch (IllegalArgumentException e) {
             System.err.println("[Processor " + id + "] Unknown command code: " + msg.getcType());
-            return buildResponse(request, ResponseCode.ERROR,
-                    "Unknown command code: " + msg.getcType());
+            return buildError(request, "Unknown command code: " + msg.getcType());
         }
 
-        switch (command) {
-            case GET_STOCK -> System.out.println("[Processor " + id + "] Handling GET_STOCK from user " + msg.getbUserId());
-            case REMOVE_STOCK -> System.out.println("[Processor " + id + "] Handling REMOVE_STOCK from user " + msg.getbUserId());
-            case ADD_STOCK -> System.out.println("[Processor " + id + "] Handling ADD_STOCK from user " + msg.getbUserId());
-            case CREATE_GROUP -> System.out.println("[Processor " + id + "] Handling CREATE_GROUP from user " + msg.getbUserId());
-            case ADD_PRODUCT_TO_GROUP -> System.out.println("[Processor " + id + "] Handling ADD_PRODUCT_TO_GROUP from user " + msg.getbUserId());
-            case SET_PRICE -> System.out.println("[Processor " + id + "] Handling SET_PRICE from user " + msg.getbUserId());
+        try {
+            return switch (command) {
+                case ADD_STOCK -> handleAddStock(request, msg);
+                case GET_STOCK -> handleGetStock(request, msg);
+                case REMOVE_STOCK -> handleRemoveStock(request, msg);
+                case SET_PRICE -> handleSetPrice(request, msg);
+                case CREATE_GROUP, ADD_PRODUCT_TO_GROUP -> {
+                    System.out.println("[Processor " + id + "] " + command + " is not backed by the product service");
+                    yield buildOk(request, null);
+                }
+            };
+        } catch (RuntimeException e) {
+            System.err.println("[Processor " + id + "] " + command + " failed: " + e.getMessage());
+            return buildError(request, e.getMessage());
         }
-
-        return buildResponse(request, ResponseCode.OK, null);
     }
 
-    private Packet buildResponse(Packet request, ResponseCode status, String errorMessage) {
-        String body = status == ResponseCode.OK
-                ? "{\"status\":\"OK\"}"
-                : "{\"status\":\"ERROR\",\"message\":\"" + escape(errorMessage) + "\"}";
-
-        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
-        Message responseMsg = new Message(
-                request.getbMsg().getcType(),
-                request.getbMsg().getbUserId(),
-                payload
-        );
-        return new Packet(request.getbSrc(), request.getbPktId(), responseMsg);
+    private Packet handleAddStock(Packet request, Message msg) {
+        ProductRequests.CreateRecord req = parse(msg.getMessage(), ProductRequests.CreateRecord.class);
+        int newId = products.create(new Product(req.name(), req.category(), req.manufacturer(), req.quantity(), req.price()));
+        System.out.println("[Processor " + id + "] ADD_STOCK created product id=" + newId);
+        return buildOk(request, Map.of("id", newId));
     }
 
-    private String escape(String s) {
-        return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"");
+    private Packet handleGetStock(Packet request, Message msg) {
+        ProductFilter filter = parseFilter(msg);
+        List<Product> found = products.search(filter, new Page(50, 0));
+        System.out.println("[Processor " + id + "] GET_STOCK matched " + found.size() + " product(s)");
+        return buildOk(request, Map.of("count", found.size(), "products", found));
+    }
+
+    private Packet handleRemoveStock(Packet request, Message msg) {
+        int productId = parse(msg.getMessage(), ProductRequests.IdRecord.class).id();
+        boolean removed = products.delete(productId);
+        System.out.println("[Processor " + id + "] REMOVE_STOCK id=" + productId + " removed=" + removed);
+        return removed ? buildOk(request, null) : buildError(request, "Product not found: " + productId);
+    }
+
+    private Packet handleSetPrice(Packet request, Message msg) {
+        ProductRequests.SetPriceRecord req = parse(msg.getMessage(), ProductRequests.SetPriceRecord.class);
+
+        Optional<Product> existing = products.read(req.id());
+        if (existing.isEmpty()) {
+            return buildError(request, "Product not found: " + req.id());
+        }
+        Product product = existing.get();
+        product.setPrice(req.price());
+        products.update(product);
+        System.out.println("[Processor " + id + "] SET_PRICE id=" + req.id() + " price=" + req.price());
+        return buildOk(request, null);
+    }
+
+    /** GET_STOCK accepts an empty body to mean "no filters" (return everything). */
+    private ProductFilter parseFilter(Message msg) {
+        byte[] raw = msg.getMessage();
+        if (raw == null || raw.length == 0) {
+            return new ProductFilter();
+        }
+        return parse(raw, ProductFilter.class);
     }
 
     @Override
