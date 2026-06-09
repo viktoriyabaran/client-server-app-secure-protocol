@@ -3,6 +3,7 @@ package pr4.db;
 import pr4.model.Group;
 
 import java.sql.*;
+import java.util.Optional;
 
 public class SqliteGroupRepository implements GroupRepository {
 
@@ -33,6 +34,23 @@ public class SqliteGroupRepository implements GroupRepository {
             return generatedKeys.getInt(1);
         } catch (SQLException e) {
             throw new RuntimeException("Can't insert group: " + group, e);
+        }
+    }
+
+    @Override
+    public Optional<Group> getById(int id) {
+        try (PreparedStatement ps = connection.prepareStatement("select * from product_group where id = ?")) {
+            ps.setInt(1, id);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new Group(rs.getInt("id"), rs.getString("name")));
+                }
+            }
+
+            return Optional.empty();
+        } catch (SQLException e) {
+            throw new RuntimeException("Can't get group by id: " + id, e);
         }
     }
 

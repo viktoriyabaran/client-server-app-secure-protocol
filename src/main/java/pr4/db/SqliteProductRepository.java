@@ -28,13 +28,14 @@ public class SqliteProductRepository implements ProductRepository {
     @Override
     public int insert(Product product) {
         try (PreparedStatement ps = connection.prepareStatement(
-                "INSERT INTO product(name, category, manufacturer, quantity, price) values (?, ?, ?, ?, ?)",
+                "INSERT INTO product(name, category, manufacturer, quantity, price, group_id) values (?, ?, ?, ?, ?, ?)",
                 Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, product.getName());
             ps.setString(2, product.getCategory());
             ps.setString(3, product.getManufacturer());
             ps.setInt(4, product.getQuantity());
             ps.setDouble(5, product.getPrice());
+            ps.setObject(6, product.getGroupId());
 
             int inserted = ps.executeUpdate();
             if (inserted < 1) {
@@ -68,13 +69,14 @@ public class SqliteProductRepository implements ProductRepository {
     @Override
     public boolean update(Product product) {
         try (PreparedStatement ps = connection.prepareStatement(
-                "update product set name = ?, category = ?, manufacturer = ?, quantity = ?, price = ? where id = ?")) {
+                "update product set name = ?, category = ?, manufacturer = ?, quantity = ?, price = ?, group_id = ? where id = ?")) {
             ps.setString(1, product.getName());
             ps.setString(2, product.getCategory());
             ps.setString(3, product.getManufacturer());
             ps.setInt(4, product.getQuantity());
             ps.setDouble(5, product.getPrice());
-            ps.setInt(6, product.getId());
+            ps.setObject(6, product.getGroupId());
+            ps.setInt(7, product.getId());
 
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -95,7 +97,7 @@ public class SqliteProductRepository implements ProductRepository {
     @Override
     public List<Product> search(ProductFilter filt, Page page) {
         SqlWrapper wrap = whereBuilder(filt);
-        String sql = "select * from product" + wrap.sql;
+        String sql = "select product.* from product" + buildJoinClause(filt) + wrap.sql;
         if (page != null) {
             sql += " limit ? offset ?";
         }
@@ -127,7 +129,7 @@ public class SqliteProductRepository implements ProductRepository {
     @Override
     public int count(ProductFilter filt) {
         SqlWrapper wrap = whereBuilder(filt);
-        try (PreparedStatement ps = connection.prepareStatement("select count(*) from product" + wrap.sql)) {
+        try (PreparedStatement ps = connection.prepareStatement("select count(*) from product" + buildJoinClause(filt) + wrap.sql)) {
             for (int i = 0; i < wrap.params.size(); i++) {
                 ps.setObject(i + 1, wrap.params.get(i));
             }
@@ -159,18 +161,26 @@ public class SqliteProductRepository implements ProductRepository {
         }
 
         String str = Stream.of(
-                        stringLike("name", filt.name, wrapper.params),
-                        stringEquals("category", filt.category, wrapper.params),
-                        stringEquals("manufacturer", filt.manufacturer, wrapper.params),
-                        greaterOrEqual("quantity", filt.minQuantity, wrapper.params),
-                        lowerOrEqual("quantity", filt.maxQuantity, wrapper.params),
-                        greaterOrEqual("price", filt.minPrice, wrapper.params),
-                        lowerOrEqual("price", filt.maxPrice, wrapper.params))
+                        stringLike("product.name", filt.name, wrapper.params),
+                        stringEquals("product.category", filt.category, wrapper.params),
+                        stringEquals("product.manufacturer", filt.manufacturer, wrapper.params),
+                        greaterOrEqual("product.quantity", filt.minQuantity, wrapper.params),
+                        lowerOrEqual("product.quantity", filt.maxQuantity, wrapper.params),
+                        greaterOrEqual("product.price", filt.minPrice, wrapper.params),
+                        lowerOrEqual("product.price", filt.maxPrice, wrapper.params),
+                        stringLike("product_group.name", filt.groupName, wrapper.params))
                 .filter(Objects::nonNull)
                 .collect(Collectors.joining(" and "));
 
         wrapper.sql = str.isEmpty() ? "" : " where " + str;
         return wrapper;
+    }
+
+    private String buildJoinClause(ProductFilter filt) {
+        if (filt != null && filt.groupName != null) {
+            return " join product_group on product.group_id = product_group.id";
+        }
+        return "";
     }
 
     private String stringEquals(String columnName, Object value, List<Object> params) {
@@ -206,13 +216,18 @@ public class SqliteProductRepository implements ProductRepository {
     }
 
     private Product map(ResultSet rs) throws SQLException {
-        return new Product(
+        Product product = new Product(
                 rs.getInt("id"),
                 rs.getString("name"),
                 rs.getString("category"),
                 rs.getString("manufacturer"),
                 rs.getInt("quantity"),
                 rs.getDouble("price"));
+
+        int groupId = rs.getInt("group_id");
+        product.setGroupId(rs.wasNull() ? null : groupId);
+
+        return product;
     }
 
     private void init() {
@@ -224,7 +239,8 @@ public class SqliteProductRepository implements ProductRepository {
                     category VARCHAR(100) not null,
                     manufacturer VARCHAR(100) not null,
                     quantity INTEGER not null,
-                    price REAL not null
+                    price REAL not null,
+                    group_id INTEGER REFERENCES product_group(id)
                 )
                 """);
         } catch (SQLException e) {

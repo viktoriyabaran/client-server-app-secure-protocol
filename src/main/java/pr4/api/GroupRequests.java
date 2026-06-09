@@ -7,4 +7,7 @@ public final class GroupRequests {
 
     public record CreateRecord(String name) {
     }
+
+    public record AddProductRecord(int productId, int groupId) {
+    }
 }

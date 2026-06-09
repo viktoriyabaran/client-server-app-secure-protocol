@@ -10,6 +10,7 @@ public class Product {
     private String manufacturer;
     private int quantity;
     private double price;
+    private Integer groupId;
 
     public Product(String name, String category, String manufacturer, int quantity, double price) {
         this(null, name, category, manufacturer, quantity, price);
@@ -72,6 +73,14 @@ public class Product {
         this.price = price;
     }
 
+    public Integer getGroupId() {
+        return groupId;
+    }
+
+    public void setGroupId(Integer groupId) {
+        this.groupId = groupId;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) return false;
@@ -81,12 +90,13 @@ public class Product {
             && Objects.equals(id, product.id)
             && Objects.equals(name, product.name)
             && Objects.equals(category, product.category)
-            && Objects.equals(manufacturer, product.manufacturer);
+            && Objects.equals(manufacturer, product.manufacturer)
+            && Objects.equals(groupId, product.groupId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, category, manufacturer, quantity, price);
+        return Objects.hash(id, name, category, manufacturer, quantity, price, groupId);
     }
 
     @Override
@@ -98,6 +108,7 @@ public class Product {
             ", manufacturer='" + manufacturer + '\'' +
             ", quantity=" + quantity +
             ", price=" + price +
+            ", groupId=" + groupId +
             '}';
     }
 }

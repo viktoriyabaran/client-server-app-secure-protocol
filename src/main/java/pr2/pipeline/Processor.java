@@ -69,10 +69,7 @@ public class Processor implements Runnable {
                 case REMOVE_STOCK -> handleRemoveStock(request, msg);
                 case SET_PRICE -> handleSetPrice(request, msg);
                 case CREATE_GROUP -> handleCreateGroup(request, msg);
-                case ADD_PRODUCT_TO_GROUP -> {
-                    System.out.println("[Processor " + id + "] " + command + " is not backed by the product service");
-                    yield buildOk(request, null);
-                }
+                case ADD_PRODUCT_TO_GROUP -> handleAddProductToGroup(request, msg);
             };
         } catch (RuntimeException e) {
             System.err.println("[Processor " + id + "] " + command + " failed: " + e.getMessage());
@@ -120,6 +117,24 @@ public class Processor implements Runnable {
         int newId = groupService.create(new Group(req.name()));
         System.out.println("[Processor " + id + "] CREATE_GROUP created group id=" + newId);
         return buildOk(request, Map.of("id", newId));
+    }
+
+    private Packet handleAddProductToGroup(Packet request, Message msg) {
+        GroupRequests.AddProductRecord req = parse(msg.getMessage(), GroupRequests.AddProductRecord.class);
+
+        if (groupService.read(req.groupId()).isEmpty()) {
+            return buildError(request, "Group not found: " + req.groupId());
+        }
+        Optional<Product> existing = productService.read(req.productId());
+        if (existing.isEmpty()) {
+            return buildError(request, "Product not found: " + req.productId());
+        }
+
+        Product product = existing.get();
+        product.setGroupId(req.groupId());
+        productService.update(product);
+        System.out.println("[Processor " + id + "] ADD_PRODUCT_TO_GROUP product=" + req.productId() + " group=" + req.groupId());
+        return buildOk(request, null);
     }
 
     private ProductFilter parseFilter(Message msg) {
