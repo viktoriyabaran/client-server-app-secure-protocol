@@ -17,12 +17,11 @@ public class SqliteProductRepository implements ProductRepository {
     private final Connection connection;
 
     public SqliteProductRepository(String dbName) {
-        try {
-            this.connection = DriverManager.getConnection("jdbc:sqlite:" + dbName);
-        } catch (SQLException e) {
-            throw new RuntimeException("Can't create SQLite DB", e);
-        }
+        this(SqliteConnections.open(dbName));
+    }
 
+    public SqliteProductRepository(Connection connection) {
+        this.connection = connection;
         init();
     }
 
