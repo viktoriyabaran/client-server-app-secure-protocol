@@ -45,6 +45,8 @@ public class ProductService {
         return db.count(filter);
     }
 
+    public boolean existsByName(String name) { return db.getByName(name); }
+
     private void validate(Product product) {
         if (product == null) {
             throw new IllegalArgumentException("Product can't be null");

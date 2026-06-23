@@ -22,4 +22,6 @@ public interface ProductRepository {
     int count(ProductFilter filter);
 
     int deleteAll();
+
+    boolean getByName(String name);
 }

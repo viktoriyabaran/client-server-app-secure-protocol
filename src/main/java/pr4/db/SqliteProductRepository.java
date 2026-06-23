@@ -153,6 +153,18 @@ public class SqliteProductRepository implements ProductRepository {
         }
     }
 
+    @Override
+    public boolean getByName(String name) {
+        try (PreparedStatement ps = connection.prepareStatement("select 1 from product where name = ?")) {
+            ps.setString(1, name);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Can't check product name: " + name, e);
+        }
+    }
+
     private SqlWrapper whereBuilder(ProductFilter filt) {
         SqlWrapper wrapper = new SqlWrapper();
         if (filt == null) {

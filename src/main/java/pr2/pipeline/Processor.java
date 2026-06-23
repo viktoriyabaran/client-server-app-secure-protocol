@@ -39,9 +39,7 @@ public class Processor implements Runnable {
     }
 
     private Processor(BlockingQueue<Packet> input, BlockingQueue<Packet> output, Connection connection) {
-        this(input, output,
-                new ProductService(new SqliteProductRepository(connection)),
-                new GroupService(new SqliteGroupRepository(connection)));
+        this(input, output, new ProductService(new SqliteProductRepository(connection)), new GroupService(new SqliteGroupRepository(connection)));
     }
 
     public Processor(BlockingQueue<Packet> input, BlockingQueue<Packet> output, ProductService productService, GroupService groupService) {
